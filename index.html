@@ -1,0 +1,558 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WINGO FFT PREDICTOR</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Arial', sans-serif;
+            background: #0a0a0a;
+            color: white;
+            height: 100vh;
+            overflow: hidden;
+        }
+
+        /* IFRAME FULL SCREEN */
+        #gameIframe {
+            width: 100%;
+            height: 100vh;
+            border: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            z-index: 1;
+        }
+
+        /* MINIMAL OVERLAY */
+        #predictorOverlay {
+            position: fixed;
+            top: 5px;
+            right: 5px;
+            width: 160px;
+            background: rgba(0, 0, 0, 0.98);
+            border: 1px solid #ff6b6b;
+            border-radius: 6px;
+            padding: 6px;
+            z-index: 10000;
+            color: white;
+            box-shadow: 0 0 8px rgba(255, 107, 107, 0.4);
+            font-size: 10px;
+        }
+
+        .input-mini {
+            width: 100%;
+            padding: 3px;
+            border: 1px solid #ff6b6b;
+            border-radius: 3px;
+            background: rgba(255, 255, 255, 0.1);
+            color: white;
+            font-size: 9px;
+            text-align: center;
+            margin-bottom: 3px;
+        }
+
+        .btn-mini {
+            width: 100%;
+            padding: 4px;
+            background: #ff6b6b;
+            color: white;
+            border: none;
+            border-radius: 3px;
+            font-weight: bold;
+            cursor: pointer;
+            font-size: 9px;
+            margin-bottom: 3px;
+        }
+
+        .btn-mini:hover {
+            background: #ee5a52;
+        }
+
+        .btn-wa {
+            background: #25D366;
+        }
+
+        .btn-wa:hover {
+            background: #128C7E;
+        }
+
+        .btn-clear {
+            background: #ff4444;
+            font-size: 8px;
+            padding: 3px;
+        }
+
+        .btn-clear:hover {
+            background: #cc0000;
+        }
+
+        .prediction-mini {
+            text-align: center;
+            margin: 4px 0;
+        }
+
+        .prediction-text {
+            font-size: 12px;
+            font-weight: bold;
+            margin: 2px 0;
+        }
+
+        .prediction-text.kecil {
+            color: #4ecdc4;
+        }
+
+        .prediction-text.besar {
+            color: #ff6b6b;
+        }
+
+        .confidence-mini {
+            height: 4px;
+            background: rgba(255, 255, 255, 0.2);
+            border-radius: 2px;
+            margin: 2px 0;
+            overflow: hidden;
+        }
+
+        .confidence-fill {
+            height: 100%;
+            border-radius: 2px;
+        }
+
+        .confidence-fill.kecil {
+            background: #4ecdc4;
+        }
+
+        .confidence-fill.besar {
+            background: #ff6b6b;
+        }
+
+        .history-mini {
+            display: flex;
+            justify-content: space-between;
+            margin: 3px 0;
+        }
+
+        .history-dot {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            font-size: 7px;
+            text-align: center;
+            line-height: 12px;
+            font-weight: bold;
+        }
+
+        .history-dot.kecil {
+            background: rgba(78, 205, 196, 0.3);
+            color: #4ecdc4;
+        }
+
+        .history-dot.besar {
+            background: rgba(255, 107, 107, 0.3);
+            color: #ff6b6b;
+        }
+
+        .status-mini {
+            font-size: 7px;
+            color: #00ff88;
+            text-align: center;
+            margin-top: 2px;
+        }
+
+        .storage-indicator {
+            font-size: 6px;
+            color: #cccccc;
+            text-align: center;
+            margin-top: 1px;
+        }
+    </style>
+</head>
+<body>
+    <!-- IFRAME DIDIHUB FULL SCREEN -->
+    <iframe src="https://didihub99.com" id="gameIframe"></iframe>
+
+    <!-- MINIMAL OVERLAY -->
+    <div id="predictorOverlay">
+        <!-- Input Periode -->
+        <input type="text" id="periodeInput" class="input-mini" placeholder="Periode" maxlength="2" value="01">
+        
+        <!-- Input History -->
+        <input type="text" id="historyInput" class="input-mini" placeholder="8 History" maxlength="8">
+        
+        <!-- Input Hasil Baru -->
+        <input type="text" id="newResultInput" class="input-mini" placeholder="Hasil Baru" maxlength="1">
+        
+        <button class="btn-mini" onclick="analyzeAndShare()">PREDICT & WA</button>
+        <button class="btn-mini btn-wa" onclick="shareToWhatsApp()">SHARE WA</button>
+        <button class="btn-mini btn-clear" onclick="clearAllData()">CLEAR DATA</button>
+        
+        <div class="prediction-mini">
+            <div class="prediction-text" id="predictionText">-</div>
+            <div class="confidence-mini">
+                <div class="confidence-fill" id="confidenceBar" style="width: 0%"></div>
+            </div>
+            <div style="font-size:7px; color:#ccc;" id="confidenceText">-</div>
+        </div>
+
+        <div class="history-mini" id="historyDisplay">
+            <div class="history-dot">-</div>
+            <div class="history-dot">-</div>
+            <div class="history-dot">-</div>
+            <div class="history-dot">-</div>
+            <div class="history-dot">-</div>
+            <div class="history-dot">-</div>
+            <div class="history-dot">-</div>
+            <div class="history-dot">-</div>
+        </div>
+
+        <div class="status-mini" id="statusText">Ready</div>
+        <div class="storage-indicator" id="storageIndicator">Data: Saved</div>
+    </div>
+
+    <script>
+        class FFTWingoPredictor {
+            constructor() {
+                this.history = [3,7,2,8,1,9,4,6];
+                this.currentPrediction = null;
+                this.loadFromLocalStorage();
+                this.updateDisplay();
+            }
+
+            // ✅ LOCAL STORAGE - DATA DISIMPAN PERMANEN
+            saveToLocalStorage() {
+                try {
+                    localStorage.setItem('wingoHistory', JSON.stringify(this.history));
+                    localStorage.setItem('wingoLastSave', new Date().toLocaleTimeString());
+                    this.showStorageIndicator('Data: Saved ✓');
+                    return true;
+                } catch (error) {
+                    this.showStorageIndicator('Data: Error');
+                    return false;
+                }
+            }
+
+            loadFromLocalStorage() {
+                try {
+                    const savedHistory = localStorage.getItem('wingoHistory');
+                    const lastSave = localStorage.getItem('wingoLastSave');
+                    
+                    if (savedHistory) {
+                        this.history = JSON.parse(savedHistory);
+                        this.showStorageIndicator(`Data: Loaded (${lastSave || 'now'})`);
+                        this.showStatus('Data loaded from storage');
+                    } else {
+                        this.showStorageIndicator('Data: Default');
+                        this.showStatus('Using default data');
+                    }
+                } catch (error) {
+                    this.showStorageIndicator('Data: Corrupted');
+                    this.showStatus('Storage error, using default');
+                }
+            }
+
+            clearLocalStorage() {
+                try {
+                    localStorage.removeItem('wingoHistory');
+                    localStorage.removeItem('wingoLastSave');
+                    this.history = [3,7,2,8,1,9,4,6]; // Reset ke default
+                    this.showStorageIndicator('Data: Cleared ✓');
+                    this.showStatus('All data cleared');
+                    return true;
+                } catch (error) {
+                    this.showStorageIndicator('Data: Clear Error');
+                    this.showStatus('Error clearing data');
+                    return false;
+                }
+            }
+
+            showStorageIndicator(message) {
+                const indicator = document.getElementById('storageIndicator');
+                if (indicator) {
+                    indicator.textContent = message;
+                }
+            }
+
+            showStatus(message) {
+                const statusElement = document.getElementById('statusText');
+                if (statusElement) {
+                    statusElement.textContent = message;
+                    setTimeout(() => {
+                        statusElement.textContent = 'Ready';
+                    }, 2000);
+                }
+            }
+
+            // ✅ FFT ANALYSIS
+            fft(signal) {
+                const N = signal.length;
+                if (N <= 1) return signal;
+                
+                const even = this.fft(signal.filter((_, idx) => idx % 2 === 0));
+                const odd = this.fft(signal.filter((_, idx) => idx % 2 === 1));
+                
+                const result = new Array(N);
+                
+                for (let k = 0; k < N / 2; k++) {
+                    const t = this.complexMultiply(
+                        this.complexExp(-2 * Math.PI * k / N),
+                        odd[k]
+                    );
+                    
+                    result[k] = this.complexAdd(even[k], t);
+                    result[k + N / 2] = this.complexSubtract(even[k], t);
+                }
+                
+                return result;
+            }
+
+            complexMultiply(a, b) {
+                return {
+                    real: a.real * b.real - a.imag * b.imag,
+                    imag: a.real * b.imag + a.imag * b.real
+                };
+            }
+
+            complexAdd(a, b) {
+                return {
+                    real: a.real + b.real,
+                    imag: a.imag + b.imag
+                };
+            }
+
+            complexSubtract(a, b) {
+                return {
+                    real: a.real - b.real,
+                    imag: a.imag - b.imag
+                };
+            }
+
+            complexExp(theta) {
+                return {
+                    real: Math.cos(theta),
+                    imag: Math.sin(theta)
+                };
+            }
+
+            setHistoryFromInput(input) {
+                const numbers = input.split('').map(char => parseInt(char)).filter(num => !isNaN(num));
+                if (numbers.length === 8) {
+                    this.history = numbers;
+                    this.saveToLocalStorage(); // ✅ AUTO SAVE
+                    this.updateDisplay();
+                    return true;
+                }
+                return false;
+            }
+
+            addNewResult(number) {
+                const num = parseInt(number);
+                if (isNaN(num) || num < 0 || num > 9) return false;
+
+                this.history.shift();
+                this.history.push(num);
+                this.saveToLocalStorage(); // ✅ AUTO SAVE
+                this.updateDisplay();
+                return true;
+            }
+
+            analyzeWithFFT() {
+                if (this.history.length !== 8) return null;
+
+                const signal = this.history.map(number => ({
+                    real: number - 4.5,
+                    imag: 0
+                }));
+
+                const fftResult = this.fft(signal);
+                const magnitudes = fftResult.map(complex => 
+                    Math.sqrt(complex.real * complex.real + complex.imag * complex.imag)
+                );
+
+                let dominantFreq = 0;
+                let maxMagnitude = 0;
+                
+                for (let i = 1; i < magnitudes.length / 2; i++) {
+                    if (magnitudes[i] > maxMagnitude) {
+                        maxMagnitude = magnitudes[i];
+                        dominantFreq = i;
+                    }
+                }
+
+                const period = magnitudes.length / dominantFreq;
+                const lastNumber = this.history[this.history.length - 1];
+                let predictedNumber;
+
+                if (dominantFreq > 0 && period > 0) {
+                    predictedNumber = Math.round((lastNumber + period) % 10);
+                } else {
+                    const avg = this.history.reduce((sum, num) => sum + num, 0) / 8;
+                    predictedNumber = avg > 4.5 ? 
+                        Math.max(0, Math.floor(lastNumber - 1)) : 
+                        Math.min(9, Math.ceil(lastNumber + 1));
+                }
+
+                predictedNumber = Math.max(0, Math.min(9, predictedNumber));
+
+                const totalPower = magnitudes.reduce((sum, mag) => sum + mag, 0);
+                const dominantPower = maxMagnitude / totalPower;
+                const confidence = Math.min(95, dominantPower * 100 + 30);
+
+                this.currentPrediction = {
+                    prediction: predictedNumber >= 5 ? 'BESAR' : 'KECIL',
+                    confidence: confidence
+                };
+
+                return this.currentPrediction;
+            }
+
+            getCurrentPrediction() {
+                return this.currentPrediction;
+            }
+
+            getHistory() {
+                return this.history;
+            }
+
+            updateDisplay() {
+                document.getElementById('historyInput').value = this.history.join('');
+                this.displayHistory();
+            }
+
+            displayHistory() {
+                const historyDisplay = document.getElementById('historyDisplay');
+                historyDisplay.innerHTML = '';
+                
+                this.history.forEach(number => {
+                    const dotElement = document.createElement('div');
+                    const type = number >= 5 ? 'besar' : 'kecil';
+                    dotElement.className = `history-dot ${type}`;
+                    dotElement.textContent = number;
+                    historyDisplay.appendChild(dotElement);
+                });
+            }
+        }
+
+        const predictor = new FFTWingoPredictor();
+
+        // ✅ WHATSAPP SHARING
+        function shareToWhatsApp() {
+            const prediction = predictor.getCurrentPrediction();
+            const periode = document.getElementById('periodeInput').value.trim();
+            
+            if (!prediction) {
+                predictor.showStatus('No Prediction');
+                return;
+            }
+
+            if (!periode || periode.length !== 2) {
+                predictor.showStatus('Invalid Periode');
+                return;
+            }
+
+            const message = `🔮 *WINGO FFT PREDICTION*
+
+📊 *Periode*: ${periode}
+🎯 *Ukuran*: ${prediction.prediction}
+✅ *Akurasi*: ${prediction.confidence.toFixed(0)}%
+
+📈 *History*: ${predictor.getHistory().join('')}
+
+*FFT Predictor*`;
+
+            const encodedMessage = encodeURIComponent(message);
+            const whatsappUrl = `https://wa.me/?text=${encodedMessage}`;
+            
+            window.open(whatsappUrl, '_blank');
+            predictor.showStatus('WA Opened');
+        }
+
+        // ✅ CLEAR DATA FUNCTION
+        function clearAllData() {
+            if (confirm('Hapus SEMUA data history?\nData akan direset ke default.')) {
+                predictor.clearLocalStorage();
+                predictor.updateDisplay();
+                
+                // Reset prediction display
+                const predictionElement = document.getElementById('predictionText');
+                predictionElement.textContent = '-';
+                predictionElement.className = 'prediction-text';
+                
+                const confidenceBar = document.getElementById('confidenceBar');
+                confidenceBar.style.width = '0%';
+                confidenceBar.className = 'confidence-fill';
+                
+                document.getElementById('confidenceText').textContent = '-';
+                
+                predictor.showStatus('Data cleared successfully');
+            }
+        }
+
+        function analyzeAndShare() {
+            const historyInput = document.getElementById('historyInput').value.trim();
+            const newResultInput = document.getElementById('newResultInput').value.trim();
+
+            if (historyInput && historyInput.length === 8) {
+                predictor.setHistoryFromInput(historyInput);
+            }
+
+            if (newResultInput) {
+                predictor.addNewResult(newResultInput);
+                document.getElementById('newResultInput').value = '';
+            }
+
+            const result = predictor.analyzeWithFFT();
+            if (result) {
+                updatePredictionDisplay(result);
+                setTimeout(shareToWhatsApp, 500);
+            }
+        }
+
+        function updatePredictionDisplay(result) {
+            const predictionElement = document.getElementById('predictionText');
+            predictionElement.textContent = result.prediction;
+            predictionElement.className = `prediction-text ${result.prediction.toLowerCase()}`;
+            
+            const confidenceBar = document.getElementById('confidenceBar');
+            confidenceBar.style.width = result.confidence + '%';
+            confidenceBar.className = `confidence-fill ${result.prediction.toLowerCase()}`;
+            
+            document.getElementById('confidenceText').textContent = result.confidence.toFixed(0) + '%';
+        }
+
+        // Enter key support
+        document.getElementById('periodeInput').addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') analyzeAndShare();
+        });
+
+        document.getElementById('historyInput').addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') analyzeAndShare();
+        });
+
+        document.getElementById('newResultInput').addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') analyzeAndShare();
+        });
+
+        // Auto predict on load
+        window.addEventListener('load', function() {
+            setTimeout(() => {
+                const result = predictor.analyzeWithFFT();
+                if (result) {
+                    updatePredictionDisplay(result);
+                }
+            }, 300);
+        });
+
+        // ✅ AUTO SAVE BEFORE CLOSE
+        window.addEventListener('beforeunload', function() {
+            predictor.saveToLocalStorage();
+        });
+    </script>
+</body>
+</html>
